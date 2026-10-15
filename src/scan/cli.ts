@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-import { statSync, writeFileSync, readFileSync } from 'node:fs'
+import { statSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { scan, SEVERITY_ORDER, type Severity } from './scanner.js'
 import { renderBadge, endpointJson } from './badge.js'
 import { toSarif } from './sarif.js'
 import { loadBaseline, saveBaseline, isNewFinding } from './baseline.js'
 import { takeSnapshot, diffSnapshots, type Snapshot } from './snapshot.js'
+import { extractSourceMapRef, resolveMapUrl, recoverableSources } from './probe.js'
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
@@ -40,6 +43,8 @@ Other commands:
   nore snapshot <dir> [-o file]       Record file hashes of a build
   nore diff <dir> --against <file>    Detect unexpected changes vs a snapshot
                                       (exit 1 if anything added/removed/changed)
+  nore probe <js-url>                 Scan a DEPLOYED script and check whether its
+                                      source map is actually reachable over HTTP
 
 Examples:
   npx nore scan ./dist --min B
@@ -119,6 +124,76 @@ if (argvEarly[0] === 'diff') {
   }
   process.exit(d.added.length + d.removed.length + d.changed.length ? 1 : 0)
 }
+
+// --- nore probe <js-url> : scan a deployed script + live source-map check ---
+if (argvEarly[0] === 'probe') {
+  const url = dirArg
+  if (!url || !/^https?:\/\//.test(url)) {
+    process.stderr.write('error: probe requires an http(s) URL to a deployed .js\n')
+    process.exit(2)
+  }
+  const asJson = argvEarly.includes('--json')
+  const get = async (u: string) => {
+    const ctrl = new AbortController()
+    const to = setTimeout(() => ctrl.abort(), 10000)
+    try {
+      return await fetch(u, { signal: ctrl.signal, redirect: 'follow' })
+    } finally {
+      clearTimeout(to)
+    }
+  }
+  ;(async () => {
+    let js: string
+    try {
+      const res = await get(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      js = await res.text()
+    } catch (e) {
+      process.stderr.write(`error: could not fetch ${url}: ${(e as Error).message}\n`)
+      process.exit(2)
+    }
+
+    // Reuse the full scanner on the fetched content.
+    const d = mkdtempSync(join(tmpdir(), 'nore-probe-'))
+    writeFileSync(join(d, 'app.js'), js)
+    const report = scan(d)
+    rmSync(d, { recursive: true, force: true })
+
+    // Live source-map accessibility — the real "is it exposed" check.
+    const ref = extractSourceMapRef(js)
+    let map: { kind: string; url?: string; accessible?: boolean; status?: number; sources?: number } = { kind: ref.kind }
+    if (ref.kind === 'external' && ref.url) {
+      const mapUrl = resolveMapUrl(ref.url, url)
+      map.url = mapUrl
+      try {
+        const mres = await get(mapUrl)
+        map.status = mres.status
+        map.accessible = mres.ok
+        if (mres.ok) map.sources = recoverableSources(await mres.text())
+      } catch {
+        map.accessible = false
+      }
+    } else if (ref.kind === 'inline') {
+      map.accessible = true
+      map.sources = recoverableSources(Buffer.from((js.match(/sourceMappingURL=data:[^,]*,([^\s'"]+)/) ?? [])[1] ?? '', 'base64').toString('utf8'))
+    }
+
+    if (asJson) {
+      process.stdout.write(JSON.stringify({ url, scan: report, sourcemap: map }, null, 2) + '\n')
+    } else {
+      process.stdout.write(`\n  ${paint('NoRE probe', C.bold)}  ${url}\n`)
+      process.stdout.write(`  exposure grade ${paint(report.grade, GRADE_COLOR[report.grade] ?? '')}  score ${report.score}/100\n`)
+      if (map.kind === 'none') process.stdout.write('  ' + paint('source map: no reference in the script.', C.green) + '\n')
+      else if (map.kind === 'inline') process.stdout.write('  ' + paint(`source map: INLINE in the script — ${map.sources} source(s) recoverable.`, C.red) + '\n')
+      else if (map.accessible) process.stdout.write('  ' + paint(`source map: PUBLICLY ACCESSIBLE at ${map.url} — ${map.sources} source(s) recoverable.`, C.red) + '\n')
+      else process.stdout.write('  ' + paint(`source map: referenced (${map.url}) but NOT reachable (HTTP ${map.status ?? 'error'}) — good.`, C.green) + '\n')
+      process.stdout.write('\n')
+    }
+    // Fail if source is actually recoverable (inline, or an accessible map).
+    const exposed = map.kind === 'inline' || map.accessible === true
+    process.exit(exposed ? 1 : 0)
+  })()
+} else {
 
 const argv = process.argv.slice(2)
 if (argv[0] !== 'scan' || !argv[1] || argv.includes('-h') || argv.includes('--help')) help()
@@ -230,3 +305,4 @@ if (failOn && SEVERITY_ORDER.includes(failOn)) {
   }
 }
 if (failed) process.exit(1)
+}

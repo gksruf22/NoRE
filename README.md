@@ -327,6 +327,20 @@ tools, no source), but a binary is not a vault — it can be disassembled and it
 constants read, and anything it fetches is still observable. True secrets belong
 on the server; WASM protects *logic*, not data.
 
+## Probe a live deployment
+
+Check whether a **deployed** script actually leaks its source — the real test is
+not "is there a .map in dist" but "is the map reachable on the server":
+
+```sh
+npx nore probe https://yourapp.com/assets/index-abc123.js
+```
+
+It fetches the script, scans its content, and makes a **live HTTP request for the
+referenced source map** — reporting whether it is publicly accessible (and how
+many original files it would hand over) or correctly blocked. Exits non-zero if
+source is recoverable. Run it against your own deploy after shipping.
+
 ## Detect deployment tampering
 
 Catch unexpected changes between deploys — a supply-chain tamper, a dependency

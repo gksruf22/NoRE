@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added — live deployment probe
+
+- `nore probe <js-url>` fetches a DEPLOYED script, scans it, and makes a live
+  HTTP request for its referenced source map — reporting whether the map is
+  actually reachable (and how many sources it leaks) vs correctly blocked. This
+  is the "file present vs externally accessible" distinction: validated against
+  real deploys (axios's map is public with 43 sources; React prod has none).
+
 ### Fixed — anti-LLM fingerprint accuracy (validated on real libraries)
 
 - Scanning real minified libraries (React, Vue, lodash, axios, jQuery) surfaced
