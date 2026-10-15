@@ -77,15 +77,18 @@ const JS_EXT = new Set(['.js', '.mjs', '.cjs'])
 // Distinctive javascript-obfuscator shapes only. Deliberately narrow: generic
 // minified patterns (a plain `switch(x){case 0:`, a `.push()/.shift()` queue)
 // must NOT register, or merely-minified libraries would look "obfuscated".
+// All signals are gated on the `_0x<hex>` identifier hallmark of
+// javascript-obfuscator's hexadecimal name generator (NoRE's default). Plain
+// minified libraries use short names (a, b, _t), never `_0x1a2b3c`, so these do
+// not fire on mere minification — validated against React/Vue/lodash/three/d3.
 const TRANSFORM_FINGERPRINTS: [string, RegExp][] = [
-  // Many `_0x…` hex identifiers (one or two is normal; require several).
-  ['identifier-mangling', /_0x[a-f0-9]{4,}\b[\s\S]{0,4000}?_0x[a-f0-9]{4,}\b[\s\S]{0,4000}?_0x[a-f0-9]{4,}\b/],
-  // The string-array rotation checksum: two+ `parseInt(…)/<num>` terms summed,
-  // which is how the decoder self-orders. Very distinctive; absent in plain code.
-  ['string-array', /parseInt\([\s\S]{0,80}?\)\s*\/\s*0?x?[0-9a-f]+[\s\S]{0,400}?parseInt\([\s\S]{0,80}?\)\s*\/\s*0?x?[0-9a-f]+/i],
-  // Chained hex wrapper calls into the decoder, or `function d(a,b){return A(…)}`.
+  // Several `_0x…` hex identifiers (one or two could be coincidence; require 3+).
+  ['hex-identifiers', /(?:_0x[a-f0-9]{4,}\b[\s\S]{0,2000}?){3}/],
+  // String-array decoder call: a hex-named function invoked with a hex index.
+  ['string-array', /_0x[a-f0-9]{3,}\(\s*-?0x[0-9a-f]+/],
+  // Chained hex wrapper calls into the decoder: _0x..( _0x..( … ) ).
   ['string-array-wrappers', /_0x[a-f0-9]{3,}\s*\(\s*_0x[a-f0-9]{3,}\s*\(/],
-  // Control-flow flattening dispatch order string, e.g. '3|1|4|0|2'.split('|').
+  // Control-flow flattening dispatch order string, e.g. '3|1|4|0|2'.
   ['control-flow-flattening', /['"]\d+(?:\|\d+){3,}['"]/],
   ['debug/self-defending', /\bdebugger\b|constructor\s*\(\s*['"]return\s+(?:this|\\?\/)/]
 ]
@@ -96,11 +99,11 @@ const TRANSFORM_FINGERPRINTS: [string, RegExp][] = [
 // positive when seen; only identifier renaming is "shallow".
 function antiLlmVerdict(t: Set<string>): ScanReport['antiLlm']['verdict'] {
   if (t.size === 0) return 'none'
-  const strings = t.has('string-array') || t.has('string-array-wrappers')
+  const obfuscated = t.has('hex-identifiers') || t.has('string-array') || t.has('string-array-wrappers')
   const flow = t.has('control-flow-flattening')
-  if (strings && flow) return 'strong'
-  if (strings || flow) return 'partial'
-  return 'weak' // only renaming / debug traps — an LLM can still make headway
+  if (obfuscated && flow) return 'strong'
+  if (obfuscated) return 'partial'
+  return 'weak' // only a debug trap, no core obfuscation — an LLM can make headway
 }
 
 function walkFiles(dir: string, out: string[] = []): string[] {
