@@ -268,6 +268,19 @@ are `critical`; keys usually meant to be public (Firebase/Google `AIza…`, JWTs
 are `medium` "review" with guidance to restrict rather than panic; and
 publishable keys (`pk_live_`/`pk_test_`) are never flagged.
 
+**Record reviewed false positives with reasons** in a committed
+`nore-ignore.json`, applied identically locally and in CI:
+
+```json
+{ "ignore": [
+  { "id": "secret:Google/Firebase API key", "reason": "public Firebase config, referrer-restricted" },
+  { "id": "internal-hosts", "reason": "staging URLs are intentional in the preview build" }
+] }
+```
+
+Suppressed findings are listed (with their reason) under the report, never hidden
+silently.
+
 **Adopt on a legacy app with `--baseline`:** the first run records existing
 findings; later runs gate only on **new** ones. So a project with 20 known
 warnings can still block a PR that introduces a new `critical` — no big-bang

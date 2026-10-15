@@ -8,6 +8,7 @@ import { toSarif } from './sarif.js'
 import { loadBaseline, saveBaseline, isNewFinding } from './baseline.js'
 import { takeSnapshot, diffSnapshots, type Snapshot } from './snapshot.js'
 import { extractSourceMapRef, resolveMapUrl, recoverableSources } from './probe.js'
+import { loadIgnoreFile } from './ignorefile.js'
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
@@ -208,7 +209,11 @@ const valueOf = (flag: string): string | undefined => {
 const format = argv.includes('--json') ? 'json' : (valueOf('--format') ?? 'text')
 const minGrade = valueOf('--min')?.toUpperCase() ?? (argv.includes('--min') ? 'C' : null)
 const failOn = valueOf('--fail-on')?.toLowerCase() as Severity | undefined
-const ignore = (valueOf('--ignore') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+const ignoreFlag = (valueOf('--ignore') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+// Also honor a committed nore-ignore.json (reviewed false positives, with reasons).
+const ignoreEntries = loadIgnoreFile([dir, process.cwd()])
+const reasonFor = new Map(ignoreEntries.filter((e) => e.reason).map((e) => [e.id, e.reason!]))
+const ignore = [...new Set([...ignoreFlag, ...ignoreEntries.map((e) => e.id)])]
 
 try {
   if (!statSync(dir).isDirectory()) throw new Error('not a directory')
@@ -256,6 +261,14 @@ function printReport(): void {
         console.log(`    ${paint('↳', C.dim)} ${paint(`${l.file}:${l.line}`, C.cyan)}${l.match ? paint(`  ${l.match}`, C.dim) : ''}`)
       }
       if (f.remediation) console.log(`    ${paint('fix:', C.dim)} ${paint(f.remediation, C.dim)}`)
+    }
+  }
+  if (report.suppressed.length) {
+    console.log('')
+    console.log(`  ${paint(`${report.suppressed.length} suppressed`, C.dim)} ${paint('(reviewed false positives)', C.dim)}`)
+    for (const f of report.suppressed) {
+      const why = reasonFor.get(f.id) ?? reasonFor.get(f.category)
+      console.log(`    ${paint('–', C.dim)} ${paint(f.id, C.dim)}${why ? paint(` — ${why}`, C.dim) : ''}`)
     }
   }
   console.log('')

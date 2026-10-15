@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added — committed ignore file with reasons
+
+- `nore-ignore.json` records reviewed false positives WITH a reason and is applied
+  identically locally and in CI (merged with `--ignore`). Suppressed findings are
+  listed with their reason under the report, never dropped silently
+  (`report.suppressed` in JSON).
+
 ### Changed — npm package name
 
 - Published as `@gksruf22/nore` (the bare `nore` name was already taken on npm).

@@ -49,6 +49,8 @@ export interface ScanReport {
   /** Estimated resistance to LLM/automated deobfuscation (JsDeObsBench). */
   antiLlm: { transforms: string[]; verdict: 'strong' | 'partial' | 'weak' | 'none' }
   findings: Finding[]
+  /** Findings removed by `ignore` (reviewed false positives), for transparency. */
+  suppressed: Finding[]
 }
 
 // Stable keys for a finding, for baseline diffing across builds. Deliberately
@@ -470,9 +472,9 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
 
   // Suppress reviewed false positives (by finding id or category).
   const ignore = new Set(opts.ignore ?? [])
-  const kept = ignore.size
-    ? findings.filter((f) => !ignore.has(f.id) && !ignore.has(f.category))
-    : findings
+  const suppressedBy = (f: Finding) => ignore.has(f.id) || ignore.has(f.category)
+  const kept = ignore.size ? findings.filter((f) => !suppressedBy(f)) : findings
+  const suppressed = ignore.size ? findings.filter(suppressedBy) : []
 
   const score = Math.max(0, 100 - kept.reduce((s, f) => s + f.penalty, 0))
   const severityCounts: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
@@ -486,7 +488,8 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
     grade: gradeFor(score),
     severityCounts,
     antiLlm: { transforms: [...transforms], verdict },
-    findings: kept.sort((a, b) => rank(b.severity) - rank(a.severity) || b.penalty - a.penalty)
+    findings: kept.sort((a, b) => rank(b.severity) - rank(a.severity) || b.penalty - a.penalty),
+    suppressed
   }
 }
 
