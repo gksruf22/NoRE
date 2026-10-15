@@ -211,3 +211,26 @@ describe('baseline (new-only gating)', () => {
     expect(loadBaseline(join(dir, 'nope.json'))).toBeNull()
   })
 })
+
+describe('secret classification (public vs real)', () => {
+  it('flags a Firebase/Google key as medium, not critical', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const k="AIzaSyD-1234567890abcdefghijklmnopqrstuv";')
+    const f = scan(d).findings.find((x) => x.category === 'credential')!
+    expect(f.severity).toBe('medium')
+    expect(f.title).toMatch(/Review/)
+  })
+
+  it('does not flag publishable keys (pk_live_)', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const k="pk_live_1234567890ABCDEFGH";')
+    expect(scan(d).findings.some((x) => x.category === 'credential')).toBe(false)
+  })
+
+  it('still flags a real server secret as critical', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const k="sk_live_1234567890ABCDEFGH";')
+    const f = scan(d).findings.find((x) => x.category === 'credential')!
+    expect(f.severity).toBe('critical')
+  })
+})

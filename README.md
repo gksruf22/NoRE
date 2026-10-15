@@ -154,6 +154,12 @@ The size column is on a tiny sample (fixed decoder overhead dominates); it
 amortizes on real bundles, and selective obfuscation keeps it off code that
 doesn't need it. `low` already removes readable strings — the single biggest win.
 
+**Compatibility:** obfuscation preserves behavior for the patterns that usually
+break under it — **dynamic import, code splitting, and reflection / computed
+property access** — verified by an executing test (object keys are not mangled,
+so name-based access is safe). `debugProtection` hinders interactive debugging by
+design but does not break normal execution (incl. in Node/SSR).
+
 ### Performance cost (measured — `npm run perf`)
 
 Obfuscation is not free. Two kinds of code, very different costs:
@@ -255,6 +261,12 @@ credential or shipped source map, `info` for merely-readable strings), a
 `--min` to gate on how reverse-engineerable the bundle is, and `--fail-on` to
 gate only on real risk (so a readable-but-safe bundle doesn't fail CI). A pattern
 match is flagged as *review required*, never asserted as a confirmed leak.
+
+**Secret findings are classified, not blindly flagged:** real server-side
+credentials (Stripe `sk_live_`, AWS, GitHub, Slack, npm, OpenAI, private keys)
+are `critical`; keys usually meant to be public (Firebase/Google `AIza…`, JWTs)
+are `medium` "review" with guidance to restrict rather than panic; and
+publishable keys (`pk_live_`/`pk_test_`) are never flagged.
 
 **Adopt on a legacy app with `--baseline`:** the first run records existing
 findings; later runs gate only on **new** ones. So a project with 20 known

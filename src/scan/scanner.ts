@@ -112,20 +112,41 @@ function walkFiles(dir: string, out: string[] = []): string[] {
 
 // Looks like a human-readable word/identifier (not a mangled hex/short name).
 const READABLE = /^[a-z_$][a-zA-Z0-9_$]{3,}$/
-// Common leaked-secret shapes. Best-effort; cleartext secrets in a bundle are
-// always worth flagging regardless.
-const SECRET_PATTERNS: [string, RegExp][] = [
-  ['Stripe secret key', /sk_live_[A-Za-z0-9]{10,}/],
-  ['Google API key', /AIza[0-9A-Za-z_\-]{30,}/],
-  ['AWS access key', /AKIA[0-9A-Z]{12,}/],
-  ['GitHub token', /gh[pousr]_[A-Za-z0-9]{20,}/],
-  ['GitHub fine-grained PAT', /github_pat_[A-Za-z0-9_]{30,}/],
-  ['Slack token', /xox[baprs]-[0-9A-Za-z-]{10,}/],
-  ['npm token', /npm_[A-Za-z0-9]{36}/],
-  ['OpenAI API key', /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/],
-  ['private key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/],
-  ['JWT', /eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\./]
+// Secret-shaped strings. severity 'critical' = shape is a real server-side
+// credential; 'medium' = commonly meant to be public but should be reviewed
+// (e.g. Firebase/web API keys, JWTs). A match is never asserted as a leak.
+interface SecretPattern {
+  label: string
+  re: RegExp
+  severity: Severity
+  note?: string
+}
+const SECRET_PATTERNS: SecretPattern[] = [
+  { label: 'Stripe secret key', re: /sk_live_[A-Za-z0-9]{10,}/, severity: 'critical' },
+  { label: 'AWS access key', re: /AKIA[0-9A-Z]{12,}/, severity: 'critical' },
+  { label: 'GitHub token', re: /gh[pousr]_[A-Za-z0-9]{20,}/, severity: 'critical' },
+  { label: 'GitHub fine-grained PAT', re: /github_pat_[A-Za-z0-9_]{30,}/, severity: 'critical' },
+  { label: 'Slack token', re: /xox[baprs]-[0-9A-Za-z-]{10,}/, severity: 'critical' },
+  { label: 'npm token', re: /npm_[A-Za-z0-9]{36}/, severity: 'critical' },
+  { label: 'OpenAI API key', re: /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/, severity: 'critical' },
+  { label: 'private key', re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, severity: 'critical' },
+  // Often intentionally public — flag for review, not as a critical leak.
+  {
+    label: 'Google/Firebase API key',
+    re: /AIza[0-9A-Za-z_\-]{30,}/,
+    severity: 'medium',
+    note: 'Firebase/web API keys are usually meant to ship to the client. Restrict it (HTTP-referrer / API restrictions) rather than treating it as a secret.'
+  },
+  {
+    label: 'JWT',
+    re: /eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\./,
+    severity: 'medium',
+    note: 'A JWT in the bundle may be a public/non-secret token; confirm it is not a long-lived server credential.'
+  }
 ]
+
+// Publishable keys that are SAFE to ship — never flag these.
+const PUBLISHABLE = /\b(?:pk_live_|pk_test_|sk_test_)[A-Za-z0-9]{6,}/
 
 // Internal/infra hosts that shouldn't appear in a public bundle — they leak
 // topology (staging, admin panels, private networks). Matched only inside string
@@ -215,7 +236,7 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
   let readableStrings = 0
   let totalIds = 0
   let readableIds = 0
-  const secretHits = new Map<string, Evidence[]>()
+  const secretHits = new Map<string, { pattern: SecretPattern; locs: Evidence[] }>()
   const internalHits: Evidence[] = []
   const transforms = new Set<string>()
   const inlineMapHits: Evidence[] = []
@@ -244,13 +265,14 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
     }
 
     // Secrets: record every occurrence with location (match redacted).
-    for (const [label, re] of SECRET_PATTERNS) {
-      const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g')
+    for (const pattern of SECRET_PATTERNS) {
+      const g = new RegExp(pattern.re.source, pattern.re.flags.includes('g') ? pattern.re.flags : pattern.re.flags + 'g')
       for (const m of code.matchAll(g)) {
         if (canaryValues.has(m[0])) continue // our own decoy
-        const arr = secretHits.get(label) ?? []
-        arr.push({ file, line: lineAt(code, m.index ?? 0), match: redact(m[0]) })
-        secretHits.set(label, arr)
+        if (PUBLISHABLE.test(m[0])) continue // publishable key — safe to ship
+        const entry = secretHits.get(pattern.label) ?? { pattern, locs: [] }
+        entry.locs.push({ file, line: lineAt(code, m.index ?? 0), match: redact(m[0]) })
+        secretHits.set(pattern.label, entry)
       }
     }
 
@@ -307,16 +329,21 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
 
   // Credentials — the only findings we call out as likely real risk; still
   // "review required", not "confirmed leak" (a pattern match is not proof).
-  for (const [label, locs] of secretHits) {
+  for (const [label, { pattern, locs }] of secretHits) {
+    const critical = pattern.severity === 'critical'
     findings.push({
       id: `secret:${label}`,
-      severity: 'critical',
+      severity: pattern.severity,
       category: 'credential',
-      title: `Possible ${label} in bundle (${locs.length}×)`,
-      detail: `A string matching a ${label} pattern is shipped to the client. Pattern match ≠ confirmed leak — verify whether it is a real credential.`,
-      remediation: 'If real: revoke and rotate it, and move server-managed credentials to the backend. If it is a publishable key or a false positive, suppress it with --ignore.',
+      title: `${critical ? 'Possible' : 'Review'} ${label} in bundle (${locs.length}×)`,
+      detail:
+        `A string matching a ${label} pattern is shipped to the client. Pattern match ≠ confirmed leak.` +
+        (pattern.note ? ` ${pattern.note}` : ''),
+      remediation: critical
+        ? 'If real: revoke and rotate it, and move server-managed credentials to the backend. If it is a false positive, suppress it with --ignore.'
+        : 'Confirm whether it is meant to be public; if so, restrict it and suppress this with --ignore.',
       locations: locs.slice(0, 20),
-      penalty: 25
+      penalty: critical ? 25 : 8
     })
   }
 

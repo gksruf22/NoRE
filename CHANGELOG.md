@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Changed — fewer secret false positives
+
+- Secret findings are now classified: real server credentials stay `critical`;
+  keys usually meant to be public (Firebase/Google `AIza…`, JWTs) are `medium`
+  "review" with restrict-don't-panic guidance; publishable keys
+  (`pk_live_`/`pk_test_`) are never flagged.
+
+### Added — obfuscation behavior test
+
+- An executing test proves high-preset obfuscation preserves behavior for
+  dynamic import, code splitting, and reflection (computed property access).
+  Confirmed `debugProtection` does not break Node/SSR execution.
+
 ### Added — baseline (new-only CI gating)
 
 - `--baseline <file>` records current findings; later runs mark findings NEW vs
