@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Changed — scanner credibility (accuracy & DX over more detectors)
+
+- Findings now carry **severity separate from the exposure score** (`critical`
+  for credentials/source maps … `info` for merely-readable strings — readable
+  code is no longer treated as a vulnerability), a **file:line location**, the
+  matched pattern (secrets redacted), a **remediation**, and a **category**.
+- Report includes `severityCounts`; a secret match is labeled *review required*,
+  not a confirmed leak.
+- CLI: `--fail-on <severity>` (gate on real risk, independent of `--min` grade),
+  `--ignore <ids/categories>` (suppress reviewed false positives, affects score
+  and gating), `--format sarif` (GitHub Code Scanning) and `--format json`.
+- GitHub Action gains `fail-on`, `ignore`, `format` inputs.
+- Honesty: softened the canary "zero false positives" claim (a stray crawler can
+  trip one; a silent canary is not proof of no RE) and added a WASM caveat
+  (a binary is not a vault).
+
 ### Added — the differentiators
 
 - **Exposure scanner + CLI** (`npx nore scan <dir>`): parses built JS with acorn

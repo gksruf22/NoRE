@@ -33,7 +33,7 @@ describe('scan', () => {
     const d = fresh()
     writeFileSync(join(d, 'app.js'), 'const k="sk_live_REAL1234567890ABCDEFGH"; const c="sk_live_canary01";')
     // Without a manifest, the secret is flagged.
-    expect(scan(d).findings.some((f) => f.id === 'secrets')).toBe(true)
+    expect(scan(d).findings.some((f) => f.category === 'credential')).toBe(true)
 
     // Declare the canary -> it must not be penalized, and shows as a positive.
     writeFileSync(
@@ -41,7 +41,7 @@ describe('scan', () => {
       JSON.stringify({ canaries: [{ value: 'sk_live_REAL1234567890ABCDEFGH' }, { value: 'sk_live_canary01' }] })
     )
     const r = scan(d)
-    expect(r.findings.some((f) => f.id === 'secrets')).toBe(false)
+    expect(r.findings.some((f) => f.category === 'credential')).toBe(false)
     expect(r.findings.some((f) => f.id === 'canaries')).toBe(true)
   })
 
@@ -51,7 +51,7 @@ describe('scan', () => {
     const arr = Array.from({ length: 40 }, (_, i) => `"${Buffer.from('payload' + i).toString('base64')}"`)
     writeFileSync(join(d, 'app.js'), `const a=[${arr.join(',')}];`)
     const r = scan(d)
-    expect(r.findings.some((f) => f.id === 'cleartext-strings')).toBe(false)
+    expect(r.findings.some((f) => f.id === 'readable-strings')).toBe(false)
   })
 })
 
@@ -128,7 +128,7 @@ describe('expanded threat detection', () => {
       'const ok = "https://api.example.com/v1";'
     ].join('\n'))
     const r = scan(d)
-    expect(r.findings.some((f) => f.id === 'secrets')).toBe(true)
+    expect(r.findings.some((f) => f.category === 'credential')).toBe(true)
     expect(r.findings.some((f) => f.id === 'internal-hosts')).toBe(true)
   })
 
@@ -137,5 +137,50 @@ describe('expanded threat detection', () => {
     writeFileSync(join(d, 'app.js'), 'const u="https://cdn.example.com/x";const v="https://api.github.com";')
     const r = scan(d)
     expect(r.findings.some((f) => f.id === 'internal-hosts')).toBe(false)
+  })
+})
+
+import { toSarif } from '../src/scan/sarif.js'
+
+describe('evidence, severity, ignore, sarif', () => {
+  function withSecret(): string {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'line1\nconst k="sk_live_REALkey1234567890ABCD";')
+    return d
+  }
+
+  it('attaches file:line evidence to a credential finding (match redacted)', () => {
+    const r = scan(withSecret())
+    const sec = r.findings.find((f) => f.category === 'credential')!
+    expect(sec.locations?.[0].file).toBe('app.js')
+    expect(sec.locations?.[0].line).toBe(2)
+    expect(sec.locations?.[0].match).not.toContain('REALkey1234567890') // redacted
+    expect(sec.remediation.length).toBeGreaterThan(0)
+  })
+
+  it('separates severity from the exposure score', () => {
+    const r = scan(withSecret())
+    expect(r.severityCounts.critical).toBeGreaterThanOrEqual(1)
+    // readable strings/identifiers are INFO, not a vulnerability severity
+    const info = r.findings.filter((f) => f.severity === 'info').map((f) => f.id)
+    expect(r.findings.every((f) => f.severity !== 'high' || f.category !== 'exposure')).toBe(true)
+    void info
+  })
+
+  it('--ignore suppresses a finding and its penalty', () => {
+    const base = scan(withSecret())
+    const ignored = scan(withSecret(), { ignore: ['credential'] })
+    expect(base.findings.some((f) => f.category === 'credential')).toBe(true)
+    expect(ignored.findings.some((f) => f.category === 'credential')).toBe(false)
+    expect(ignored.score).toBeGreaterThanOrEqual(base.score)
+  })
+
+  it('emits valid SARIF with a result and location', () => {
+    const sarif = JSON.parse(toSarif(scan(withSecret())))
+    expect(sarif.version).toBe('2.1.0')
+    expect(sarif.runs[0].tool.driver.name).toBe('NoRE')
+    const res = sarif.runs[0].results.find((x: any) => x.ruleId.startsWith('secret:'))
+    expect(res.level).toBe('error')
+    expect(res.locations[0].physicalLocation.region.startLine).toBe(2)
   })
 })

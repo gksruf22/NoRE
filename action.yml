@@ -10,9 +10,21 @@ inputs:
     required: false
     default: 'dist'
   min-grade:
-    description: 'Fail the job if the grade is below this (A–F). Empty = never fail.'
+    description: 'Fail the job if the RE-exposure grade is below this (A–F). Empty = no grade gate.'
     required: false
     default: ''
+  fail-on:
+    description: 'Fail if any finding is at/above this severity (critical|high|medium|low). Gate on real risk.'
+    required: false
+    default: ''
+  ignore:
+    description: 'Comma-separated finding ids/categories to suppress (reviewed false positives).'
+    required: false
+    default: ''
+  format:
+    description: 'Output format: text | json | sarif.'
+    required: false
+    default: 'text'
   endpoint:
     description: 'Optional path to write a shields.io endpoint JSON (for a live badge).'
     required: false
@@ -32,5 +44,8 @@ runs:
         set -e
         args=("${{ inputs.dir }}")
         [ -n "${{ inputs.min-grade }}" ] && args+=(--min "${{ inputs.min-grade }}")
+        [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
+        [ -n "${{ inputs.ignore }}" ] && args+=(--ignore "${{ inputs.ignore }}")
+        [ -n "${{ inputs.format }}" ] && args+=(--format "${{ inputs.format }}")
         [ -n "${{ inputs.endpoint }}" ] && args+=(--endpoint "${{ inputs.endpoint }}")
         node "$GITHUB_ACTION_PATH/dist/cli.js" scan "${args[@]}"
