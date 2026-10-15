@@ -253,3 +253,24 @@ describe('hardcoded auth headers', () => {
     expect(scan(d).findings.some((f) => f.category === 'credential')).toBe(false)
   })
 })
+
+describe('subresource integrity (SRI)', () => {
+  it('flags an external script without integrity, not one with it or a local script', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'index.html'), [
+      '<script src="https://cdn.example.com/lib.js"></script>',
+      '<script src="https://cdn.example.com/ok.js" integrity="sha384-abc" crossorigin></script>',
+      '<script src="/local/app.js"></script>'
+    ].join('\n'))
+    const f = scan(d).findings.find((x) => x.id === 'missing-sri')
+    expect(f).toBeDefined()
+    expect(f!.locations!.length).toBe(1)
+    expect(f!.locations![0].match).toBe('https://cdn.example.com/lib.js')
+  })
+
+  it('no SRI finding when there are no external scripts', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'index.html'), '<script src="/app.js"></script>')
+    expect(scan(d).findings.some((x) => x.id === 'missing-sri')).toBe(false)
+  })
+})

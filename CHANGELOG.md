@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added — supply-chain & runtime test coverage
+
+- Scanner checks HTML for external `<script src="https://…">` without
+  Subresource Integrity (SRI) — a compromised CDN could swap the script (OWASP).
+- Test coverage for the runtime guard (integrity-mismatch firing, no-false-fire,
+  idempotent stop) and every response strategy (callback/halt/beacon/throttle).
+
 ### Added — hardcoded credential detection & hardened canary collector
 
 - Scanner detects hardcoded `Authorization: Bearer <token>` and `Basic <base64>`

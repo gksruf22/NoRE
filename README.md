@@ -301,7 +301,8 @@ The scanner parses your built JS (via `acorn`) and checks for: source maps
 (separate `.map`, inline data-URI, or referenced) and how many original files
 they leak; cleartext strings; readable identifiers; obfuscation depth; secret-
 shaped tokens (Stripe/AWS/GitHub/Slack/npm/OpenAI keys, JWTs, private keys, hardcoded Authorization/Basic headers); and
-internal/infra URLs that leak topology. It reads a `nore-canaries.json` left by
+internal/infra URLs that leak topology; and external `<script>`s loaded without
+Subresource Integrity (SRI). It reads a `nore-canaries.json` left by
 the plugin so your own decoys aren't flagged.
 
 It also reports an **anti-LLM deobfuscation** verdict — it fingerprints which

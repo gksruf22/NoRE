@@ -220,6 +220,31 @@ export function scan(root: string, opts: ScanOptions = {}): ScanReport {
   let bytes = 0
   const canaryValues = loadCanaryValues(root)
 
+  // HTML: external <script src="https://…"> without Subresource Integrity (SRI).
+  // A compromised third-party host can then swap the script unnoticed (OWASP).
+  const sriHits: Evidence[] = []
+  for (const h of files.filter((f) => f.endsWith('.html'))) {
+    const html = readFileSync(h, 'utf8')
+    for (const m of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']https?:\/\/[^"']+["'][^>]*>/gi)) {
+      if (!/\bintegrity\s*=/i.test(m[0])) {
+        const src = (m[0].match(/src\s*=\s*["']([^"']+)["']/i) ?? [])[1]
+        sriHits.push({ file: rel(h), line: lineAt(html, m.index ?? 0), match: src })
+      }
+    }
+  }
+  if (sriHits.length) {
+    findings.push({
+      id: 'missing-sri',
+      severity: 'medium',
+      category: 'infra',
+      title: `${sriHits.length} external <script> without Subresource Integrity`,
+      detail: 'A third-party script loaded without an integrity hash can be swapped by a compromised CDN/host, injecting code into your app.',
+      remediation: 'Add integrity="sha384-…" and crossorigin="anonymous" to each external <script>, or self-host the dependency.',
+      locations: sriHits.slice(0, 20),
+      penalty: 10
+    })
+  }
+
   // 1. Separate .map files — original source verbatim.
   if (mapFiles.length) {
     let recoverable = 0
