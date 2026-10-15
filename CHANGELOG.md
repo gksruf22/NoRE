@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added — hardcoded credential detection & hardened canary collector
+
+- Scanner detects hardcoded `Authorization: Bearer <token>` and `Basic <base64>`
+  headers (templated values and prose like "Basic understanding" are not flagged).
+- `examples/canary-collector.mjs` now de-dups repeat probes, rate-limits per IP,
+  hashes client IPs by default (privacy), guards `/stats` with `NORE_COLLECTOR_KEY`,
+  and ships a `--selfcheck`.
+
 ### Added — deployment change detection
 
 - `nore snapshot <dir>` records file hashes of a build; `nore diff <dir>

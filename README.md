@@ -300,7 +300,7 @@ See [`action.yml`](./action.yml) and [`.github/workflows/example-exposure.yml`](
 The scanner parses your built JS (via `acorn`) and checks for: source maps
 (separate `.map`, inline data-URI, or referenced) and how many original files
 they leak; cleartext strings; readable identifiers; obfuscation depth; secret-
-shaped tokens (Stripe/AWS/GitHub/Slack/npm/OpenAI keys, JWTs, private keys); and
+shaped tokens (Stripe/AWS/GitHub/Slack/npm/OpenAI keys, JWTs, private keys, hardcoded Authorization/Basic headers); and
 internal/infra URLs that leak topology. It reads a `nore-canaries.json` left by
 the plugin so your own decoys aren't flagged.
 
@@ -355,8 +355,9 @@ The plugin injects decoy config (fake endpoints, `sk_live_…` keys, admin flags
 into the bundle in cleartext and writes a **private** `nore-canaries.json`
 (id → label) alongside your build — keep that file, don't deploy it. Any request
 that reaches a canary route is a reverse engineer probing extracted "secrets".
-A minimal collector is in [`examples/canary-collector.mjs`](./examples/canary-collector.mjs);
-route its hits to your own alerting.
+A ready-to-run collector is in [`examples/canary-collector.mjs`](./examples/canary-collector.mjs)
+— it de-dups repeat probes, rate-limits per IP, hashes client IPs by default, and
+guards its `/stats` endpoint with a key. Route its alerts to Slack/email/SIEM.
 
 > Canary tokens are a known idea; what's new here is planting them in a frontend
 > bundle as anti-RE tripwires, wired through the build. They complement

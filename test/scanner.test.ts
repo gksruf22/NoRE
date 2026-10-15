@@ -234,3 +234,22 @@ describe('secret classification (public vs real)', () => {
     expect(f.severity).toBe('critical')
   })
 })
+
+describe('hardcoded auth headers', () => {
+  it('flags a hardcoded Bearer token and Basic auth', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), [
+      'const h = { Authorization: "Bearer abc123DEF456ghi789" };',
+      'fetch(u, { headers: { authorization: "Basic dXNlcjpzZWNyZXQxMjM0" } });'
+    ].join('\n'))
+    const creds = scan(d).findings.filter((f) => f.category === 'credential')
+    expect(creds.some((f) => /Bearer/.test(f.title))).toBe(true)
+    expect(creds.some((f) => /Basic/.test(f.title))).toBe(true)
+  })
+
+  it('does not flag templated Bearer or the words "Basic understanding"', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const h=`Bearer ${token}`; const s="Basic understanding of things";')
+    expect(scan(d).findings.some((f) => f.category === 'credential')).toBe(false)
+  })
+})

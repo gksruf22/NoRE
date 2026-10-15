@@ -130,6 +130,21 @@ const SECRET_PATTERNS: SecretPattern[] = [
   { label: 'npm token', re: /npm_[A-Za-z0-9]{36}/, severity: 'critical' },
   { label: 'OpenAI API key', re: /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/, severity: 'critical' },
   { label: 'private key', re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/, severity: 'critical' },
+  // Hardcoded auth headers. Template literals (Bearer ${t}) don't match — only
+  // literal tokens do.
+  {
+    label: 'hardcoded Bearer token',
+    re: /["']?authorization["']?\s*[:=]\s*["']?\s*bearer\s+[A-Za-z0-9._~+/-]{12,}/i,
+    severity: 'critical'
+  },
+  {
+    // Guard against prose ("Basic understanding"): require a base64-ish run with
+    // at least one digit/+/=, min 16 chars.
+    label: 'hardcoded Basic auth',
+    re: /\bBasic\s+(?=[A-Za-z0-9+/]*[0-9+/=])[A-Za-z0-9+/]{16,}={0,2}/,
+    severity: 'critical',
+    note: 'A hardcoded Basic auth header decodes to user:password.'
+  },
   // Often intentionally public — flag for review, not as a critical leak.
   {
     label: 'Google/Firebase API key',
