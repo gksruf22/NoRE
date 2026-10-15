@@ -107,3 +107,14 @@ describe('endpointJson', () => {
     expect(typeof j.color).toBe('string')
   })
 })
+
+describe('inline source maps', () => {
+  it('flags a base64 data-URI source map embedded in the JS', () => {
+    const d = fresh()
+    const map = Buffer.from(JSON.stringify({ version: 3, sources: ['src/a.ts'], sourcesContent: ['const SECRET=1'] })).toString('base64')
+    writeFileSync(join(d, 'app.js'), `console.log(1)\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${map}`)
+    const r = scan(d)
+    expect(r.findings.some((f) => f.id === 'inline-sourcemap')).toBe(true)
+    expect(r.grade).toBe('F')
+  })
+})

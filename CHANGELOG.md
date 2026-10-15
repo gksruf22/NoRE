@@ -30,6 +30,12 @@
   integer-semantics / call-boundary gotchas, and export-name stripping
   (`export { deriveTag as d0 }`) so no readable names remain in the wasm.
 
+### Added — scanner: inline source maps
+
+- Scanner now detects source maps embedded inline in the shipped JS (base64
+  data-URI) and bundle `sourceMappingURL` references, not just separate `.map`
+  files — a common, severe leak the file scan missed.
+
 ### Changed — presets tuned from research
 
 - Presets re-tuned from JsDeObsBench (arXiv:2506.20170): string obfuscation is the

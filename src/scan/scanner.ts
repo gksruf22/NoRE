@@ -162,10 +162,28 @@ export function scan(root: string): ScanReport {
   let readableIds = 0
   const secretsFound = new Set<string>()
   const transforms = new Set<string>()
+  let inlineMapSources = 0 // original files recoverable from inline (data-URI) maps
+  let externalMapRef = false
 
   for (const f of jsFiles) {
     const code = readFileSync(f, 'utf8')
     bytes += Buffer.byteLength(code)
+
+    // Inline source maps embedded in the shipped JS — a common, severe leak that
+    // a separate-.map scan misses entirely.
+    const inline = code.match(/sourceMappingURL=data:application\/json[^,]*;base64,([A-Za-z0-9+/=]+)/)
+    if (inline) {
+      try {
+        const map = JSON.parse(Buffer.from(inline[1], 'base64').toString('utf8'))
+        if (Array.isArray(map.sourcesContent)) {
+          inlineMapSources += map.sourcesContent.filter((s: unknown) => typeof s === 'string').length
+        } else inlineMapSources += 1
+      } catch {
+        inlineMapSources += 1
+      }
+    } else if (/\/\/[#@]\s*sourceMappingURL=/.test(code)) {
+      externalMapRef = true
+    }
 
     for (const [label, re] of SECRET_PATTERNS) {
       const hit = code.match(re)
@@ -197,6 +215,25 @@ export function scan(root: string): ScanReport {
 
   const strRatio = totalStrings ? readableStrings / totalStrings : 0
   const idRatio = totalIds ? readableIds / totalIds : 0
+
+  // 1b. Inline source maps baked into the shipped JS (common and severe).
+  if (inlineMapSources > 0) {
+    findings.push({
+      id: 'inline-sourcemap',
+      severity: 'critical',
+      title: `Inline source map embedded in shipped JS`,
+      detail: `${inlineMapSources} original source file(s) are recoverable from a data-URI source map inside the bundle. Set build.sourcemap=false (or use nore/vite).`,
+      penalty: 65
+    })
+  } else if (externalMapRef && !mapFiles.length) {
+    findings.push({
+      id: 'sourcemap-ref',
+      severity: 'medium',
+      title: 'Bundle references a source map',
+      detail: 'A //# sourceMappingURL comment points to a map. If that map is deployed, original source is recoverable. Strip it.',
+      penalty: 10
+    })
+  }
 
   // 2. Cleartext readable strings.
   if (readableStrings > 20 && strRatio > 0.2) {

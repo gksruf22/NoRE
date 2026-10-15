@@ -1,0 +1,18 @@
+# Example consumer workflow (manual trigger so it never fails this repo's CI).
+# Copy this into YOUR app's repo and change the build step.
+name: Example — exposure scan
+on: workflow_dispatch
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci && npm run build   # produce ./dist
+      - name: NoRE exposure scan
+        uses: ./                        # in your repo: gksruf22/nore@v1
+        with:
+          dir: dist
+          min-grade: B
+          endpoint: nore-badge.json
