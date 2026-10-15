@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed — anti-LLM fingerprint accuracy (validated on real libraries)
+
+- Scanning real minified libraries (React, Vue, lodash, axios, jQuery) surfaced
+  false positives: generic minified shapes (`case 0:`, `.push()/.shift()`, string
+  concatenation) tripped the control-flow / string-array fingerprints, so plain
+  minified code read as "strong" anti-LLM. Fingerprints are now narrowed to
+  distinctive javascript-obfuscator shapes (rotation checksum, hex-chained wrapper
+  calls, 4+ element dispatch order string, 3+ `_0x` names). Real libraries now
+  report `none`; NoRE's own `high` output reports `partial`/`strong` deterministically.
+
 ### Added — supply-chain & runtime test coverage
 
 - Scanner checks HTML for external `<script src="https://…">` without

@@ -74,17 +74,20 @@ const JS_EXT = new Set(['.js', '.mjs', '.cjs'])
 // distinct transforms are stacked. JsDeObsBench (arXiv:2506.20170) found LLM +
 // automated deobfuscation "almost completely fails" past ~6 stacked transforms.
 // Heuristic lower-bound estimate — calibrated to javascript-obfuscator output.
+// Distinctive javascript-obfuscator shapes only. Deliberately narrow: generic
+// minified patterns (a plain `switch(x){case 0:`, a `.push()/.shift()` queue)
+// must NOT register, or merely-minified libraries would look "obfuscated".
 const TRANSFORM_FINGERPRINTS: [string, RegExp][] = [
-  ['identifier-mangling', /_0x[a-f0-9]{4,}/],
-  // string-array rotation decoder: a `for(;;)try{ ... parseInt` self-ordering IIFE,
-  // or the classic push(shift()) rotation.
-  ['string-array', /for\s*\(\s*;;\s*\)\s*try\s*\{[\s\S]{0,200}?parseInt|\bpush\b[\s\S]{0,40}?\bshift\b\s*\(\s*\)/],
-  // wrapper functions delegating to the decoder: `function d(a,f){return A(...)}`
-  ['string-array-wrappers', /function\s+\w+\s*\(\s*\w+\s*,\s*\w+\s*\)\s*\{\s*return\s+\w+\s*\(/],
-  // control-flow flattening: pipe-ordered dispatch string or numbered switch cases.
-  ['control-flow-flattening', /['"](?:\d+\|){2,}\d+['"]|switch\s*\([\s\S]{0,30}?\)\s*\{\s*case\s*['"]?\d/],
-  ['split-strings', /(?:'[^']{1,6}'\s*\+\s*){3,}/],
-  ['debug/self-defending', /\bdebugger\b|constructor\s*\(\s*['"]return/]
+  // Many `_0x…` hex identifiers (one or two is normal; require several).
+  ['identifier-mangling', /_0x[a-f0-9]{4,}\b[\s\S]{0,4000}?_0x[a-f0-9]{4,}\b[\s\S]{0,4000}?_0x[a-f0-9]{4,}\b/],
+  // The string-array rotation checksum: two+ `parseInt(…)/<num>` terms summed,
+  // which is how the decoder self-orders. Very distinctive; absent in plain code.
+  ['string-array', /parseInt\([\s\S]{0,80}?\)\s*\/\s*0?x?[0-9a-f]+[\s\S]{0,400}?parseInt\([\s\S]{0,80}?\)\s*\/\s*0?x?[0-9a-f]+/i],
+  // Chained hex wrapper calls into the decoder, or `function d(a,b){return A(…)}`.
+  ['string-array-wrappers', /_0x[a-f0-9]{3,}\s*\(\s*_0x[a-f0-9]{3,}\s*\(/],
+  // Control-flow flattening dispatch order string, e.g. '3|1|4|0|2'.split('|').
+  ['control-flow-flattening', /['"]\d+(?:\|\d+){3,}['"]/],
+  ['debug/self-defending', /\bdebugger\b|constructor\s*\(\s*['"]return\s+(?:this|\\?\/)/]
 ]
 
 // Fingerprinting undercounts individual transforms, so we judge on reliable
