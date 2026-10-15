@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed — npm package name
+
+- Published as `@gksruf22/nore` (the bare `nore` name was already taken on npm).
+  Imports are `@gksruf22/nore`, `@gksruf22/nore/vite`, `@gksruf22/nore/electron`;
+  the CLI bin stays `nore` (`npx @gksruf22/nore scan …`).
+
 ### Added — live deployment probe
 
 - `nore probe <js-url>` fetches a DEPLOYED script, scans it, and makes a live

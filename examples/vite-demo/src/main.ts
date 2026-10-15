@@ -1,4 +1,4 @@
-import { createGuard } from 'nore'
+import { createGuard } from '@gksruf22/nore'
 
 // A plaintext marker. After `vite build`, grep the output in dist/ — obfuscation
 // means this literal is gone (base64-encoded in a string array), so REA's

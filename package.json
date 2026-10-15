@@ -1,5 +1,5 @@
 {
-  "name": "nore",
+  "name": "@gksruf22/nore",
   "version": "0.1.0",
   "description": "Raise the cost of reverse-engineering your web/Electron JS app: a zero-dependency runtime anti-analysis guard (CDP/devtools/integrity detection) plus a Vite hardening plugin (sourcemap stripping + obfuscation).",
   "type": "module",

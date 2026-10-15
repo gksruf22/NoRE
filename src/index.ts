@@ -1,5 +1,5 @@
 // Public runtime API. Import in your app entry:
-//   import { createGuard } from 'nore'
+//   import { createGuard } from '@gksruf22/nore'
 //   createGuard({ onDetect: (e) => console.warn('RE tooling:', e.detector) })
 
 export { createGuard } from './runtime/guard.js'

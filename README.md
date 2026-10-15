@@ -1,7 +1,7 @@
 # NoRE
 
 [![CI](https://github.com/gksruf22/nore/actions/workflows/ci.yml/badge.svg)](https://github.com/gksruf22/nore/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/nore.svg)](https://www.npmjs.com/package/nore)
+[![npm](https://img.shields.io/npm/v/%40gksruf22%2Fnore.svg)](https://www.npmjs.com/package/@gksruf22/nore)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Defend your web / Electron JavaScript app against AI-assisted reverse
@@ -10,7 +10,7 @@ bundle and let an agent extract your endpoints and secrets automatically.
 
 Obfuscation alone is a commodity. NoRE adds the two things that aren't:
 
-### 🎯 1. Score your exposure — `npx nore scan ./dist`
+### 🎯 1. Score your exposure — `npx @gksruf22/nore scan ./dist`
 
 See exactly what an attacker (or their AI agent) can recover from your shipped
 bundle, as an **A–F grade** with fixes. Gate it in CI with `--min B`.
@@ -81,13 +81,13 @@ not a vault.
 ## Install
 
 ```sh
-npm install nore
+npm install @gksruf22/nore
 ```
 
 ## Runtime guard
 
 ```ts
-import { createGuard } from 'nore'
+import { createGuard } from '@gksruf22/nore'
 
 const guard = createGuard({
   interval: 1000,                 // poll cadence (ms)
@@ -108,7 +108,7 @@ a false positive bricks the page).
 
 ```ts
 // vite.config.ts
-import { nore } from 'nore/vite'
+import { nore } from '@gksruf22/nore/vite'
 
 export default {
   plugins: [nore({ obfuscate: true })]  // only applies on `vite build`
@@ -227,7 +227,7 @@ A browser page can't reliably detect a passive CDP reader — but the Electron
 it. Import `nore/electron` in your main entry:
 
 ```ts
-import { createMainGuard, fileSha256 } from 'nore/electron'
+import { createMainGuard, fileSha256 } from '@gksruf22/nore/electron'
 
 createMainGuard({
   // asar: { path: '.../app.asar', hash: '<fileSha256 at build time>' },
@@ -243,15 +243,15 @@ the packaged `app.asar` against a hash you pin with `fileSha256`.
 ## Scanner CLI
 
 ```sh
-npx nore scan ./dist                          # graded report with file:line evidence
-npx nore scan ./dist --min B                  # fail below RE-exposure grade B
-npx nore scan ./dist --fail-on critical       # fail only on real risk, any grade
-npx nore scan ./dist --ignore "secret:OpenAI API key"  # suppress a reviewed false positive
-npx nore scan ./dist --baseline nore-baseline.json --fail-on critical  # fail only on NEW issues
-npx nore scan ./dist --format sarif > nore.sarif       # GitHub Code Scanning
-npx nore scan ./dist --format json            # machine-readable
-npx nore scan ./dist --badge badge.svg        # static SVG grade badge
-npx nore scan ./dist --endpoint badge.json    # live badge (shields.io endpoint)
+npx @gksruf22/nore scan ./dist                          # graded report with file:line evidence
+npx @gksruf22/nore scan ./dist --min B                  # fail below RE-exposure grade B
+npx @gksruf22/nore scan ./dist --fail-on critical       # fail only on real risk, any grade
+npx @gksruf22/nore scan ./dist --ignore "secret:OpenAI API key"  # suppress a reviewed false positive
+npx @gksruf22/nore scan ./dist --baseline nore-baseline.json --fail-on critical  # fail only on NEW issues
+npx @gksruf22/nore scan ./dist --format sarif > nore.sarif       # GitHub Code Scanning
+npx @gksruf22/nore scan ./dist --format json            # machine-readable
+npx @gksruf22/nore scan ./dist --badge badge.svg        # static SVG grade badge
+npx @gksruf22/nore scan ./dist --endpoint badge.json    # live badge (shields.io endpoint)
 ```
 
 Each finding carries a **severity** (the security risk — `critical` for a
@@ -333,7 +333,7 @@ Check whether a **deployed** script actually leaks its source — the real test 
 not "is there a .map in dist" but "is the map reachable on the server":
 
 ```sh
-npx nore probe https://yourapp.com/assets/index-abc123.js
+npx @gksruf22/nore probe https://yourapp.com/assets/index-abc123.js
 ```
 
 It fetches the script, scans its content, and makes a **live HTTP request for the
@@ -347,9 +347,9 @@ Catch unexpected changes between deploys — a supply-chain tamper, a dependency
 that shifted, a stray file:
 
 ```sh
-npx nore snapshot ./dist -o deploy.json        # record this deploy's file hashes
+npx @gksruf22/nore snapshot ./dist -o deploy.json        # record this deploy's file hashes
 # … next deploy …
-npx nore diff ./dist --against deploy.json      # exit 1 if anything changed
+npx @gksruf22/nore diff ./dist --against deploy.json      # exit 1 if anything changed
 ```
 
 Bundler filenames are content-hashed, so `diff` compares by a hash-stripped

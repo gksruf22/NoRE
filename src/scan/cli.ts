@@ -47,11 +47,11 @@ Other commands:
                                       source map is actually reachable over HTTP
 
 Examples:
-  npx nore scan ./dist --min B
-  npx nore scan ./dist --fail-on critical --ignore "secret:OpenAI API key"
-  npx nore scan ./dist --format sarif > nore.sarif
-  npx nore snapshot ./dist -o deploy.json
-  npx nore diff ./dist --against deploy.json`)
+  npx @gksruf22/nore scan ./dist --min B
+  npx @gksruf22/nore scan ./dist --fail-on critical --ignore "secret:OpenAI API key"
+  npx @gksruf22/nore scan ./dist --format sarif > nore.sarif
+  npx @gksruf22/nore snapshot ./dist -o deploy.json
+  npx @gksruf22/nore diff ./dist --against deploy.json`)
   process.exit(2)
 }
 

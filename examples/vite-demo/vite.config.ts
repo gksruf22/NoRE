@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import { nore } from 'nore/vite'
+import { nore } from '@gksruf22/nore/vite'
 
 export default defineConfig({
   plugins: [
