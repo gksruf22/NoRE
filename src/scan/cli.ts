@@ -3,6 +3,7 @@ import { statSync, writeFileSync } from 'node:fs'
 import { scan, SEVERITY_ORDER, type Severity } from './scanner.js'
 import { renderBadge, endpointJson } from './badge.js'
 import { toSarif } from './sarif.js'
+import { loadBaseline, saveBaseline, isNewFinding } from './baseline.js'
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
@@ -27,6 +28,8 @@ Options:
   --fail-on <severity> Exit non-zero if any finding is at/above <severity>
                        (critical|high|medium|low) — gate on real risk, not grade
   --ignore <a,b,...>   Suppress findings by id or category (reviewed false positives)
+  --baseline <file>    Record current findings; later runs gate only on NEW ones
+                       (creates the file if missing). --update-baseline rewrites it.
   --format <fmt>       text (default) | json | sarif
   --json               Shorthand for --format json
   --badge [file]       Write an SVG grade badge (stdout if no file)
@@ -64,6 +67,20 @@ try {
 
 const report = scan(dir, { ignore })
 
+// --baseline: create on first use (or --update-baseline), else mark NEW findings.
+const baselineFile = valueOf('--baseline')
+let baseline: Set<string> | null = null
+if (baselineFile) {
+  if (argv.includes('--update-baseline') || !loadBaseline(baselineFile)) {
+    const n = saveBaseline(baselineFile, report.findings)
+    if (format === 'text') console.error(paint(`baseline ${argv.includes('--update-baseline') ? 'updated' : 'created'}: ${n} finding(s) recorded in ${baselineFile}`, C.cyan))
+    process.exit(0)
+  }
+  baseline = loadBaseline(baselineFile)
+}
+const isNew = (f: (typeof report.findings)[number]) => (baseline ? isNewFinding(f, baseline) : true)
+const newCount = baseline ? report.findings.filter(isNew).length : report.findings.length
+
 function printReport(): void {
   const g = paint(` ${report.grade} `, (GRADE_COLOR[report.grade] ?? '') + C.bold)
   const sc = report.severityCounts
@@ -73,13 +90,15 @@ function printReport(): void {
   console.log(`  risk: ${paint(`${sc.critical} critical`, sc.critical ? C.red : C.dim)}, ${paint(`${sc.high} high`, sc.high ? C.red : C.dim)}, ${sc.medium} medium, ${sc.low} low, ${sc.info} info`)
   const vColor: Record<string, string> = { strong: C.green, partial: C.yellow, weak: C.red, none: C.red }
   console.log(`  anti-LLM deobfuscation: ${paint(report.antiLlm.verdict, vColor[report.antiLlm.verdict] ?? '')} ${paint(`(≥${report.antiLlm.transforms.length} transforms detected — heuristic estimate)`, C.dim)}`)
+  if (baseline) console.log(`  baseline: ${paint(`${newCount} new`, newCount ? C.yellow : C.green)}, ${report.findings.length - newCount} known`)
   console.log('')
   if (!report.findings.length) {
     console.log('  ' + paint('No findings.', C.green))
   } else {
     for (const f of report.findings) {
       const pts = f.penalty > 0 ? paint(`-${f.penalty}`, C.dim) : ''
-      console.log(`  ${paint('●', SEV[f.severity])} ${paint(f.severity.toUpperCase().padEnd(8), SEV[f.severity])} ${f.title}  ${pts}`)
+      const tag = baseline ? (isNew(f) ? paint(' NEW', C.yellow) : paint(' known', C.dim)) : ''
+      console.log(`  ${paint('●', SEV[f.severity])} ${paint(f.severity.toUpperCase().padEnd(8), SEV[f.severity])} ${f.title}${tag}  ${pts}`)
       console.log(`    ${paint(f.detail, C.dim)}`)
       for (const l of (f.locations ?? []).slice(0, 5)) {
         console.log(`    ${paint('↳', C.dim)} ${paint(`${l.file}:${l.line}`, C.cyan)}${l.match ? paint(`  ${l.match}`, C.dim) : ''}`)
@@ -125,9 +144,11 @@ if (minGrade) {
 }
 if (failOn && SEVERITY_ORDER.includes(failOn)) {
   const threshold = SEVERITY_ORDER.indexOf(failOn)
-  const worst = report.findings.reduce((m, f) => Math.max(m, SEVERITY_ORDER.indexOf(f.severity)), -1)
+  // With a baseline, only NEW findings can fail the build.
+  const considered = baseline ? report.findings.filter(isNew) : report.findings
+  const worst = considered.reduce((m, f) => Math.max(m, SEVERITY_ORDER.indexOf(f.severity)), -1)
   if (worst >= threshold) {
-    if (format === 'text') console.error(paint(`  FAIL: a ${SEVERITY_ORDER[worst]} finding is at/above --fail-on ${failOn}`, C.red))
+    if (format === 'text') console.error(paint(`  FAIL: a ${baseline ? 'new ' : ''}${SEVERITY_ORDER[worst]} finding is at/above --fail-on ${failOn}`, C.red))
     failed = true
   }
 }

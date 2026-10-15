@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added — baseline (new-only CI gating)
+
+- `--baseline <file>` records current findings; later runs mark findings NEW vs
+  known, and with `--fail-on` only NEW findings fail the build — so a project
+  with existing warnings can adopt NoRE and still block new regressions.
+  `--update-baseline` rewrites it; keys ignore hashed filenames/line shifts.
+  New `baseline` input on the GitHub Action.
+
 ### Changed — scanner credibility (accuracy & DX over more detectors)
 
 - Findings now carry **severity separate from the exposure score** (`critical`

@@ -184,3 +184,30 @@ describe('evidence, severity, ignore, sarif', () => {
     expect(res.locations[0].physicalLocation.region.startLine).toBe(2)
   })
 })
+
+import { saveBaseline, loadBaseline, isNewFinding } from '../src/scan/baseline.js'
+
+describe('baseline (new-only gating)', () => {
+  it('treats recorded findings as known and new ones as new', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const k="sk_live_OLDkey1234567890ABCD";')
+    const r1 = scan(d)
+    const bl = join(d, 'baseline.json')
+    const n = saveBaseline(bl, r1.findings)
+    expect(n).toBeGreaterThan(0)
+
+    const base = loadBaseline(bl)!
+    // same build: nothing new
+    expect(r1.findings.every((f) => !isNewFinding(f, base))).toBe(true)
+
+    // add a new secret: its finding is now new
+    writeFileSync(join(d, 'app.js'), 'const k="sk_live_OLDkey1234567890ABCD";const n2="sk_live_NEWkey0987654321ZZZZ";')
+    const r2 = scan(d)
+    const cred = r2.findings.find((f) => f.category === 'credential')!
+    expect(isNewFinding(cred, base)).toBe(true)
+  })
+
+  it('loadBaseline returns null when the file is absent', () => {
+    expect(loadBaseline(join(dir, 'nope.json'))).toBeNull()
+  })
+})

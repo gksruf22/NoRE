@@ -21,6 +21,10 @@ inputs:
     description: 'Comma-separated finding ids/categories to suppress (reviewed false positives).'
     required: false
     default: ''
+  baseline:
+    description: 'Path to a baseline file; with --fail-on, only NEW findings fail the build. Created on first run.'
+    required: false
+    default: ''
   format:
     description: 'Output format: text | json | sarif.'
     required: false
@@ -46,6 +50,7 @@ runs:
         [ -n "${{ inputs.min-grade }}" ] && args+=(--min "${{ inputs.min-grade }}")
         [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
         [ -n "${{ inputs.ignore }}" ] && args+=(--ignore "${{ inputs.ignore }}")
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
         [ -n "${{ inputs.format }}" ] && args+=(--format "${{ inputs.format }}")
         [ -n "${{ inputs.endpoint }}" ] && args+=(--endpoint "${{ inputs.endpoint }}")
         node "$GITHUB_ACTION_PATH/dist/cli.js" scan "${args[@]}"

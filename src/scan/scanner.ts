@@ -51,6 +51,16 @@ export interface ScanReport {
   findings: Finding[]
 }
 
+// Stable keys for a finding, for baseline diffing across builds. Deliberately
+// excludes file name and line (both shift between builds: hashed filenames,
+// code motion); keyed on the finding id plus the matched value where there is
+// one (so a NEW secret/host is a new key, but a moved one is not).
+export function findingKeys(f: Finding): string[] {
+  const matches = (f.locations ?? []).map((l) => l.match).filter((m): m is string => !!m)
+  if (matches.length) return [...new Set(matches.map((m) => `${f.id}::${m}`))]
+  return [f.id]
+}
+
 // Line number (1-based) of a character offset in source.
 function lineAt(code: string, index: number): number {
   let line = 1

@@ -241,6 +241,7 @@ npx nore scan ./dist                          # graded report with file:line evi
 npx nore scan ./dist --min B                  # fail below RE-exposure grade B
 npx nore scan ./dist --fail-on critical       # fail only on real risk, any grade
 npx nore scan ./dist --ignore "secret:OpenAI API key"  # suppress a reviewed false positive
+npx nore scan ./dist --baseline nore-baseline.json --fail-on critical  # fail only on NEW issues
 npx nore scan ./dist --format sarif > nore.sarif       # GitHub Code Scanning
 npx nore scan ./dist --format json            # machine-readable
 npx nore scan ./dist --badge badge.svg        # static SVG grade badge
@@ -254,6 +255,12 @@ credential or shipped source map, `info` for merely-readable strings), a
 `--min` to gate on how reverse-engineerable the bundle is, and `--fail-on` to
 gate only on real risk (so a readable-but-safe bundle doesn't fail CI). A pattern
 match is flagged as *review required*, never asserted as a confirmed leak.
+
+**Adopt on a legacy app with `--baseline`:** the first run records existing
+findings; later runs gate only on **new** ones. So a project with 20 known
+warnings can still block a PR that introduces a new `critical` — no big-bang
+cleanup required. Keys are build-stable (ignore hashed filenames and line
+shifts). Re-record with `--update-baseline`.
 
 Drop the grade into your README. Static SVG: `![RE exposure](./badge.svg)`. Or a
 **live** badge — host the endpoint JSON (commit it, or write it in CI) and point
