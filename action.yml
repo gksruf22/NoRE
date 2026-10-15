@@ -1,0 +1,36 @@
+name: 'NoRE exposure scan'
+description: 'Grade the reverse-engineering exposure of a built web app and fail CI below a threshold.'
+author: 'NoRE contributors'
+branding:
+  icon: 'shield'
+  color: 'purple'
+inputs:
+  dir:
+    description: 'Directory of built web assets to scan.'
+    required: false
+    default: 'dist'
+  min-grade:
+    description: 'Fail the job if the grade is below this (A–F). Empty = never fail.'
+    required: false
+    default: ''
+  endpoint:
+    description: 'Optional path to write a shields.io endpoint JSON (for a live badge).'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    # Build nore from the action's own checkout, so it works without an npm release.
+    - shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH"
+        npm ci --no-audit --no-fund
+        npm run build
+    - shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        set -e
+        args=("${{ inputs.dir }}")
+        [ -n "${{ inputs.min-grade }}" ] && args+=(--min "${{ inputs.min-grade }}")
+        [ -n "${{ inputs.endpoint }}" ] && args+=(--endpoint "${{ inputs.endpoint }}")
+        node "$GITHUB_ACTION_PATH/dist/cli.js" scan "${args[@]}"

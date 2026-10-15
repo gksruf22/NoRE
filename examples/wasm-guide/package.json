@@ -1,0 +1,12 @@
+{
+  "name": "nore-wasm-guide",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "asc assembly/secret.ts --outFile build/secret.wasm --optimize --runtime stub",
+    "start": "npm run build && node run.mjs"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.0"
+  }
+}
