@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { statSync, writeFileSync } from 'node:fs'
+import { statSync, writeFileSync, readFileSync } from 'node:fs'
 import { scan, SEVERITY_ORDER, type Severity } from './scanner.js'
 import { renderBadge, endpointJson } from './badge.js'
 import { toSarif } from './sarif.js'
 import { loadBaseline, saveBaseline, isNewFinding } from './baseline.js'
+import { takeSnapshot, diffSnapshots, type Snapshot } from './snapshot.js'
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
@@ -35,12 +36,88 @@ Options:
   --badge [file]       Write an SVG grade badge (stdout if no file)
   --endpoint [file]    Write shields.io endpoint JSON for a live badge
 
+Other commands:
+  nore snapshot <dir> [-o file]       Record file hashes of a build
+  nore diff <dir> --against <file>    Detect unexpected changes vs a snapshot
+                                      (exit 1 if anything added/removed/changed)
+
 Examples:
   npx nore scan ./dist --min B
   npx nore scan ./dist --fail-on critical --ignore "secret:OpenAI API key"
   npx nore scan ./dist --format sarif > nore.sarif
-  npx nore scan ./dist --endpoint nore-badge.json`)
+  npx nore snapshot ./dist -o deploy.json
+  npx nore diff ./dist --against deploy.json`)
   process.exit(2)
+}
+
+const argvEarly = process.argv.slice(2)
+const flagVal = (flag: string): string | undefined => {
+  const i = argvEarly.indexOf(flag)
+  const v = i >= 0 ? argvEarly[i + 1] : undefined
+  return v && !v.startsWith('-') ? v : undefined
+}
+const dirArg = argvEarly[1]
+const ensureDir = (d: string) => {
+  try {
+    if (!statSync(d).isDirectory()) throw 0
+  } catch {
+    process.stderr.write(`error: ${d} is not a directory\n`)
+    process.exit(2)
+  }
+}
+
+// --- nore snapshot <dir> [-o file] ---
+if (argvEarly[0] === 'snapshot') {
+  if (!dirArg) help()
+  ensureDir(dirArg)
+  const snap = JSON.stringify(takeSnapshot(dirArg), null, 2)
+  const out = flagVal('-o') ?? flagVal('--out')
+  if (out) {
+    writeFileSync(out, snap)
+    process.stderr.write(`snapshot written to ${out}\n`)
+  } else {
+    process.stdout.write(snap + '\n')
+  }
+  process.exit(0)
+}
+
+// --- nore diff <dir> --against <snapshot> ---
+if (argvEarly[0] === 'diff') {
+  if (!dirArg) help()
+  ensureDir(dirArg)
+  const against = flagVal('--against')
+  if (!against) {
+    process.stderr.write('error: diff requires --against <snapshot.json>\n')
+    process.exit(2)
+  }
+  let base: Snapshot
+  try {
+    base = JSON.parse(readFileSync(against, 'utf8'))
+  } catch {
+    process.stderr.write(`error: cannot read snapshot ${against}\n`)
+    process.exit(2)
+  }
+  const d = diffSnapshots(base, takeSnapshot(dirArg))
+  if (argvEarly.includes('--json')) {
+    process.stdout.write(JSON.stringify(d, null, 2) + '\n')
+  } else {
+    const line = (label: string, arr: string[], col: string) => {
+      if (!arr.length) return
+      process.stdout.write(`  ${paint(label, col)} (${arr.length})\n`)
+      for (const p of arr) process.stdout.write(`    ${p}\n`)
+    }
+    const total = d.added.length + d.removed.length + d.changed.length
+    process.stdout.write('\n')
+    if (!total) process.stdout.write('  ' + paint('No changes vs snapshot.', C.green) + '\n')
+    else {
+      line('changed', d.changed, C.yellow)
+      line('added', d.added, C.red)
+      line('removed', d.removed, C.red)
+      process.stdout.write('\n  ' + paint(`${total} change(s) — review for unexpected/supply-chain modifications.`, C.cyan) + '\n')
+    }
+    process.stdout.write('\n')
+  }
+  process.exit(d.added.length + d.removed.length + d.changed.length ? 1 : 0)
 }
 
 const argv = process.argv.slice(2)

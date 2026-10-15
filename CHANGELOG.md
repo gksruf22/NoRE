@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added — deployment change detection
+
+- `nore snapshot <dir>` records file hashes of a build; `nore diff <dir>
+  --against <snapshot>` reports added/removed/changed files (exit 1 on any
+  change) to catch supply-chain tampering or unexpected drift. Diffs by a
+  hash-stripped logical key so a changed content-hashed chunk reads as *changed*,
+  not remove+add.
+
 ### Changed — fewer secret false positives
 
 - Secret findings are now classified: real server credentials stay `critical`;

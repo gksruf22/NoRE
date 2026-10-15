@@ -326,6 +326,23 @@ tools, no source), but a binary is not a vault — it can be disassembled and it
 constants read, and anything it fetches is still observable. True secrets belong
 on the server; WASM protects *logic*, not data.
 
+## Detect deployment tampering
+
+Catch unexpected changes between deploys — a supply-chain tamper, a dependency
+that shifted, a stray file:
+
+```sh
+npx nore snapshot ./dist -o deploy.json        # record this deploy's file hashes
+# … next deploy …
+npx nore diff ./dist --against deploy.json      # exit 1 if anything changed
+```
+
+Bundler filenames are content-hashed, so `diff` compares by a hash-stripped
+logical key: a changed chunk reads as **changed** (not remove+add), while genuinely
+new or missing files are called out. Store the snapshot as a CI artifact and diff
+the next build against it to gate on unexpected drift. (Keep the snapshot file
+outside the scanned directory.)
+
 ## Canary tripwires
 
 Turn on canaries in the plugin and point them at a collector you control:
