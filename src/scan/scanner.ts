@@ -82,9 +82,19 @@ const SECRET_PATTERNS: [string, RegExp][] = [
   ['Stripe secret key', /sk_live_[A-Za-z0-9]{10,}/],
   ['Google API key', /AIza[0-9A-Za-z_\-]{30,}/],
   ['AWS access key', /AKIA[0-9A-Z]{12,}/],
-  ['GitHub token', /ghp_[A-Za-z0-9]{20,}/],
+  ['GitHub token', /gh[pousr]_[A-Za-z0-9]{20,}/],
+  ['GitHub fine-grained PAT', /github_pat_[A-Za-z0-9_]{30,}/],
+  ['Slack token', /xox[baprs]-[0-9A-Za-z-]{10,}/],
+  ['npm token', /npm_[A-Za-z0-9]{36}/],
+  ['OpenAI API key', /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/],
+  ['private key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/],
   ['JWT', /eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\./]
 ]
+
+// Internal/infra hosts that shouldn't appear in a public bundle — they leak
+// topology (staging, admin panels, private networks). Matched only inside string
+// literals (via the AST walk) to keep false positives near zero.
+const INTERNAL_HOST = /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|[a-z0-9.-]+\.(?:internal|local|corp|intranet))(?:[:/]|$)/i
 
 // A string is "meaningful" to an attacker if it reads like words/URLs/paths —
 // NOT if it's a base64/hex blob (which is what string-array encoding produces,
@@ -161,6 +171,7 @@ export function scan(root: string): ScanReport {
   let totalIds = 0
   let readableIds = 0
   const secretsFound = new Set<string>()
+  const internalHosts = new Set<string>()
   const transforms = new Set<string>()
   let inlineMapSources = 0 // original files recoverable from inline (data-URI) maps
   let externalMapRef = false
@@ -201,6 +212,7 @@ export function scan(root: string): ScanReport {
           if (canaryValues.has(node.value)) return // don't count our decoys
           totalStrings++
           if (isMeaningful(node.value)) readableStrings++
+          if (INTERNAL_HOST.test(node.value)) internalHosts.add(node.value)
         },
         Identifier(node: any) {
           totalIds++
@@ -287,6 +299,18 @@ export function scan(root: string): ScanReport {
       title: `Potential secret(s) in bundle: ${[...secretsFound].join(', ')}`,
       detail: 'Secrets shipped to the client are public. Move them server-side and rotate them.',
       penalty: 25
+    })
+  }
+
+  // 6. Internal/infra hosts leaking topology.
+  if (internalHosts.size) {
+    const sample = [...internalHosts].slice(0, 3).join(', ')
+    findings.push({
+      id: 'internal-hosts',
+      severity: 'medium',
+      title: `${internalHosts.size} internal/infra URL(s) in bundle`,
+      detail: `Internal hosts reveal your topology to an attacker (e.g. ${sample}). Strip staging/admin/private URLs from production builds.`,
+      penalty: 10
     })
   }
 

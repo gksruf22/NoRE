@@ -118,3 +118,24 @@ describe('inline source maps', () => {
     expect(r.grade).toBe('F')
   })
 })
+
+describe('expanded threat detection', () => {
+  it('flags a private key and an internal host, not clean code', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), [
+      'const pem = "-----BEGIN RSA PRIVATE KEY-----MIIEx";',
+      'const api = "https://admin.staging.internal/api";',
+      'const ok = "https://api.example.com/v1";'
+    ].join('\n'))
+    const r = scan(d)
+    expect(r.findings.some((f) => f.id === 'secrets')).toBe(true)
+    expect(r.findings.some((f) => f.id === 'internal-hosts')).toBe(true)
+  })
+
+  it('does not flag public URLs or normal code as internal', () => {
+    const d = fresh()
+    writeFileSync(join(d, 'app.js'), 'const u="https://cdn.example.com/x";const v="https://api.github.com";')
+    const r = scan(d)
+    expect(r.findings.some((f) => f.id === 'internal-hosts')).toBe(false)
+  })
+})

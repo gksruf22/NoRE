@@ -263,10 +263,12 @@ Fail a PR that ships reverse-engineerable code. This repo is itself an action:
 
 See [`action.yml`](./action.yml) and [`.github/workflows/example-exposure.yml`](./.github/workflows/example-exposure.yml).
 
-The scanner parses your built JS (via `acorn`) and checks for shipped source
-maps (and how many original files they leak), cleartext strings, readable
-identifiers, missing obfuscation, and secret-shaped tokens. It reads a
-`nore-canaries.json` left by the plugin so your own decoys aren't flagged.
+The scanner parses your built JS (via `acorn`) and checks for: source maps
+(separate `.map`, inline data-URI, or referenced) and how many original files
+they leak; cleartext strings; readable identifiers; obfuscation depth; secret-
+shaped tokens (Stripe/AWS/GitHub/Slack/npm/OpenAI keys, JWTs, private keys); and
+internal/infra URLs that leak topology. It reads a `nore-canaries.json` left by
+the plugin so your own decoys aren't flagged.
 
 It also reports an **anti-LLM deobfuscation** verdict — it fingerprints which
 obfuscation transforms are present and warns when a bundle is only

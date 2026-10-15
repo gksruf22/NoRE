@@ -32,6 +32,10 @@
 
 ### Added — scanner: inline source maps
 
+- Scanner threat coverage expanded: private keys, more token shapes
+  (Slack/npm/OpenAI/GitHub PAT), and internal/infra URLs (localhost, private IPs,
+  `.internal`/`.local`/`.corp` hosts) that leak topology.
+
 - Scanner now detects source maps embedded inline in the shipped JS (base64
   data-URI) and bundle `sourceMappingURL` references, not just separate `.map`
   files — a common, severe leak the file scan missed.
